@@ -33,7 +33,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version-file: ${{ inputs.VITE_PROJECT_DIR }}/.nvmrc
+          node-version: lts/*
           cache: pnpm
 
       - name: Install dependencies
