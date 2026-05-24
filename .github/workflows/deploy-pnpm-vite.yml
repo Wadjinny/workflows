@@ -1,0 +1,66 @@
+name: Deploy pnpm Vite App
+
+on:
+  workflow_call:
+    inputs:
+      VITE_PROJECT_DIR:
+        required: false
+        type: string
+        default: frontend
+    secrets:
+      SSH_HOST:
+        required: true
+      SSH_USER:
+        required: true
+      SSH_KEY:
+        required: true
+      SSH_PORT:
+        required: false
+      SSH_DEPLOY_DIR:
+        required: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ${{ inputs.VITE_PROJECT_DIR }}/.nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: ${{ inputs.VITE_PROJECT_DIR }}
+
+      - name: Build
+        run: pnpm build
+        working-directory: ${{ inputs.VITE_PROJECT_DIR }}
+
+      - name: Write SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -p "${{ secrets.SSH_PORT || '22' }}" -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Pre-clean target directory
+        run: |
+          ssh -i ~/.ssh/id_rsa \
+            -p "${{ secrets.SSH_PORT || '22' }}" \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
+            "rm -rf ${{ secrets.SSH_DEPLOY_DIR }}/${{ github.event.repository.name }}/* 2>/dev/null || true"
+
+      - name: Upload via rsync
+        run: |
+          rsync -az --delete \
+            -e "ssh -i ~/.ssh/id_rsa -p ${{ secrets.SSH_PORT || '22' }}" \
+            ${{ inputs.VITE_PROJECT_DIR }}/dist/ \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ secrets.SSH_DEPLOY_DIR }}/${{ github.event.repository.name }}"
