@@ -18,6 +18,8 @@ on:
         required: false
       SSH_DEPLOY_DIR:
         required: true
+      VITE_PB_URL:
+        required: false
 
 jobs:
   build-and-deploy:
@@ -45,6 +47,8 @@ jobs:
       - name: Build
         run: pnpm build
         working-directory: ${{ inputs.VITE_PROJECT_DIR }}
+        env:
+          VITE_PB_URL: ${{ secrets.VITE_PB_URL }}
 
       - name: Write SSH key
         run: |
