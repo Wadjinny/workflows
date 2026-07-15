@@ -24,6 +24,8 @@ on:
         required: false
       GHCR_TOKEN:
         required: false
+      DOTENV:
+        required: false
 
 jobs:
   deploy:
@@ -39,28 +41,38 @@ jobs:
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -p "${{ secrets.SSH_PORT || '22' }}" -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
 
-      - name: Copy compose file
+      - name: Prepare env file
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          DOTENV: ${{ secrets.DOTENV }}
+        run: |
+          {
+            echo "IMAGE_TAG=$IMAGE_TAG"
+            if [ -n "$DOTENV" ]; then printf '%s\n' "$DOTENV"; fi
+          } > deploy.env
+
+      - name: Copy files to server
         run: |
           ssh -i ~/.ssh/id_rsa -p "${{ secrets.SSH_PORT || '22' }}" \
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" "mkdir -p ${{ inputs.remote_dir }}"
           scp -i ~/.ssh/id_rsa -P "${{ secrets.SSH_PORT || '22' }}" \
             "${{ inputs.compose_file }}" \
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ inputs.remote_dir }}/compose.yml"
+          scp -i ~/.ssh/id_rsa -P "${{ secrets.SSH_PORT || '22' }}" \
+            deploy.env \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ inputs.remote_dir }}/.env"
 
       - name: Deploy
         env:
-          IMAGE_TAG: ${{ inputs.image_tag }}
           REMOTE_DIR: ${{ inputs.remote_dir }}
           GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
           GHCR_USER: ${{ github.actor }}
         run: |
           ssh -i ~/.ssh/id_rsa -p "${{ secrets.SSH_PORT || '22' }}" \
             "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
-            IMAGE_TAG="$IMAGE_TAG" REMOTE_DIR="$REMOTE_DIR" \
-            GHCR_TOKEN="$GHCR_TOKEN" GHCR_USER="$GHCR_USER" bash -s <<'EOF'
+            REMOTE_DIR="$REMOTE_DIR" GHCR_TOKEN="$GHCR_TOKEN" GHCR_USER="$GHCR_USER" bash -s <<'EOF'
             set -e
             cd "$REMOTE_DIR"
-            echo "IMAGE_TAG=$IMAGE_TAG" > .env
             if [ -n "$GHCR_TOKEN" ]; then
               echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
             fi
