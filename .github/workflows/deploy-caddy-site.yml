@@ -1,0 +1,61 @@
+name: Deploy Caddy Site over SSH
+
+on:
+  workflow_call:
+    inputs:
+      caddy_file:
+        type: string
+        required: false
+        default: Caddyfile
+      remote_file:
+        type: string
+        required: true
+      main_config:
+        type: string
+        required: false
+        default: /etc/caddy/Caddyfile
+    secrets:
+      SSH_HOST:
+        required: true
+      SSH_USER:
+        required: true
+      SSH_KEY:
+        required: true
+      SSH_PORT:
+        required: false
+
+jobs:
+  deploy-caddy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Write SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -p "${{ secrets.SSH_PORT || '22' }}" -H "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Upload Caddy config to temp path
+        run: |
+          scp -i ~/.ssh/id_rsa -P "${{ secrets.SSH_PORT || '22' }}" \
+            "${{ inputs.caddy_file }}" \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/tmp/caddy-site.conf"
+
+      - name: Install config and reload Caddy
+        env:
+          REMOTE_FILE: ${{ inputs.remote_file }}
+          MAIN_CONFIG: ${{ inputs.main_config }}
+        run: |
+          ssh -i ~/.ssh/id_rsa -p "${{ secrets.SSH_PORT || '22' }}" \
+            "${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}" \
+            REMOTE_FILE="$REMOTE_FILE" MAIN_CONFIG="$MAIN_CONFIG" bash -s <<'EOF'
+            set -e
+            sudo mkdir -p "$(dirname "$REMOTE_FILE")"
+            sudo mv /tmp/caddy-site.conf "$REMOTE_FILE"
+            sudo chown root:root "$REMOTE_FILE"
+            sudo caddy validate --config "$MAIN_CONFIG" --adapter caddyfile
+            sudo systemctl reload caddy
+          EOF
