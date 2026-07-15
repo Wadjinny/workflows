@@ -18,7 +18,7 @@ on:
         required: false
       SSH_DEPLOY_DIR:
         required: true
-      VITE_PB_URL:
+      DOTENV:
         required: false
 
 jobs:
@@ -45,11 +45,18 @@ jobs:
         run: pnpm install --frozen-lockfile
         working-directory: ${{ inputs.VITE_PROJECT_DIR }}
 
+      - name: Prepare env file
+        env:
+          DOTENV: ${{ secrets.DOTENV }}
+        working-directory: ${{ inputs.VITE_PROJECT_DIR }}
+        run: |
+          if [ -n "$DOTENV" ]; then
+            printf '%s\n' "$DOTENV" > .env
+          fi
+
       - name: Build
         run: pnpm build
         working-directory: ${{ inputs.VITE_PROJECT_DIR }}
-        env:
-          VITE_PB_URL: ${{ secrets.VITE_PB_URL }}
 
       - name: Write SSH key
         run: |
