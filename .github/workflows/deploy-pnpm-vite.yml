@@ -37,7 +37,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          node-version: 22
           cache: pnpm
           cache-dependency-path: ${{ inputs.VITE_PROJECT_DIR }}/pnpm-lock.yaml
 
